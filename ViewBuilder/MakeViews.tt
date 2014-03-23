@@ -1,5 +1,5 @@
 <#@ template hostspecific="true" language="C#" #>
-<#@ include file="SaveOutput.tt" #>
+<#@ include file="../SharedT4/SaveOutput.tt" #>
 <#@ include file="SingleFile.tt" #>
 <#@ assembly name="System.Core" #>
 <#@ assembly name="$(SolutionDir)\Burnsba\bin\Burnsba.dll" #>

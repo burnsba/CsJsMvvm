@@ -1,5 +1,5 @@
 <#@ template hostspecific="true" language="C#4.5" #>
-<#@ include file="SaveOutput.tt" #>
+<#@ include file="../SharedT4/SaveOutput.tt" #>
 <#@ include file="SingleFile.tt" #>
 <#@ assembly name="System.Core" #>
 <#@ import namespace="System.Linq" #>

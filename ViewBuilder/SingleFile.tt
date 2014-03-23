@@ -1,0 +1,256 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.ComponentModel.DataAnnotations.dll" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="System.ComponentModel.DataAnnotations" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="BuildJavascriptDataModel" #>
+<#+
+	bool includeDebug = false;
+	
+	void SingleFile(Type modelType)
+	{
+		WriteLine("@model " + modelType.FullName);
+		
+		InternalFormat(modelType, 0, null);
+	}
+
+	void StringBuilderHelper(Type modelType, string propertyName, string propertyPath, string editor)
+	{
+		if (includeDebug)
+		{
+			WriteLine("@* debug info:");
+			WriteLine("type: " + modelType.FullName);
+			WriteLine("property name: " + propertyName);
+			WriteLine("property path: " + propertyPath);
+			WriteLine("editor: " + editor);
+			WriteLine("*@");
+		}
+		
+		string editorName = editor.ToLower();
+		
+		switch(editorName)
+		{
+			case "system.boolean":
+			case "bool":
+				break;
+			case "richtext":
+			case "html":
+				WriteTemplateRichText(propertyName, propertyPath);
+				break;
+			case "system.datetime" :
+				WriteTemplateDatePicker(propertyName, propertyPath);
+				break;
+			case "system.string": /* fall through */
+			default:
+				WriteTemplateTextEditor(propertyName, propertyPath);
+				break;
+		}
+	}
+	
+	void InternalFormat(Type modelType, int level, string propertyPath)
+	{
+		string propertyPrefix = String.IsNullOrEmpty(propertyPath) ? "" : propertyPath;
+		
+		// to prevent infinite run-away, terminate recursion at 10 levels.
+		if (level > 10)
+		{
+			throw new OverflowException("Excessive Recursion.  Please review data model type.");
+		}
+		
+		// need to check for indirect attributes added to partial classes,
+		// for instance, partial classes generated with Entity Framework.
+		// http://stackoverflow.com/questions/1910532/attribute-isdefined-doesnt-see-attributes-applied-with-metadatatype-class
+		MetadataTypeAttribute[] metadataTypes =
+				modelType
+				.GetCustomAttributes(typeof(MetadataTypeAttribute), true)
+				.OfType<MetadataTypeAttribute>()
+				.ToArray();
+		MetadataTypeAttribute metadata = metadataTypes.FirstOrDefault();
+
+		List<PropertyInfo> properties = new List<PropertyInfo>();
+		if (metadata != null)
+		{
+			properties = metadata.MetadataClassType.GetProperties().ToList();
+		}
+		
+		// if this is not a partial class, retrieve attributes the direct way
+		if (metadataTypes.Count() == 0)
+		{
+			properties = modelType.GetProperties().ToList();
+		}
+		
+		// go over all the properties found
+		foreach (PropertyInfo propertyInfo in properties)
+		{
+			if (!Attribute.IsDefined(propertyInfo, typeof(ExportToJs)))
+			{
+				continue;
+			}
+			
+			PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
+
+			// Notes on the list checking:
+			//     if(propertyInfo.PropertyType is IEnumerable)
+			// was always returning false. Had to find another method of checking
+			// for lists; not sure how accurate this will be ...
+			bool isList = false;
+			if (typeof(IEnumerable).IsAssignableFrom(propertyInfo.PropertyType) ||
+				typeof(ICollection).IsAssignableFrom(propertyInfo.PropertyType) ||
+				typeof(IDictionary).IsAssignableFrom(propertyInfo.PropertyType) ||
+				propertyInfo.PropertyType.IsArray)
+			{
+				isList = true;
+			}
+
+			// strings are enumerable, grrr
+			if (propertyInfo.PropertyType.FullName.ToLower() == "system.string")
+			{
+				isList = false;
+			}
+			
+			// prepend any path information if this is inside a recursive call
+			string fullPropertyPath = String.IsNullOrEmpty(propertyPrefix)
+				? propertyInfo.Name
+				: propertyPrefix + propertyInfo.Name;
+			
+			if (includeDebug)
+			{
+				WriteLine("@* Property attributes length: " + propertyInfo.GetCustomAttributes().Count() + " *@");
+			}
+			
+			// Check to see if there's a data type attribute in use on the property. If so,
+			// grab the type and pass that along to choose the view editor template.
+			string editor = String.Empty;
+			DataTypeAttribute[] dtattr = propertyInfo
+							.GetCustomAttributes(typeof(DataTypeAttribute), false)
+							.OfType<DataTypeAttribute>()
+							.ToArray();
+			DataType[] dt = propertyInfo
+							.GetCustomAttributes(typeof(DataType), false)
+							.OfType<DataType>()
+							.ToArray();
+							
+			if (dtattr.Length > 0)
+			{
+				if (dtattr[0].DataType.ToString() == "Custom")
+				{
+					editor = dtattr[0].CustomDataType;
+				}
+				else
+				{
+					editor = dtattr[0].DataType.ToString();
+				}
+			}
+			else if (dt.Length > 0)
+			{
+				editor = dt[0].ToString();
+			}
+			else
+			{
+				editor = propertyInfo.PropertyType.FullName;
+			}
+			
+			// does recursion need to occur, and not a list?
+			if (p.Length > 0 && !isList)
+			{
+				// some basic .NET types have child properties, but these shouldn't be recursed.
+				switch (propertyInfo.PropertyType.FullName.ToLower())
+				{
+					case "system.string": /* fall through */
+					case "system.datetime":
+						StringBuilderHelper(propertyInfo.PropertyType, propertyInfo.Name, fullPropertyPath, editor);
+						break;
+
+					// other types are acceptable to recurse
+					default:
+						InternalFormat(propertyInfo.PropertyType, level + 1, propertyInfo.Name + ".");
+						break;
+				}
+			}
+			else
+			{
+				StringBuilderHelper(propertyInfo.PropertyType, propertyInfo.Name, fullPropertyPath, editor);
+			}
+		}
+	}
+	
+	string SplitCamelCase(string input)
+	{
+		if (String.IsNullOrEmpty(input))
+		{
+			return String.Empty;
+		}
+		
+		return Regex.Replace(input, "([a-z](?=[A-Z])|[A-Z](?=[A-Z][a-z]))", "$1 ");
+	}
+	
+	////////////////////////////////////////////////////////////////////////////////
+	// View templates
+	
+	void WriteTemplateTextEditor(string propertyName, string propertyPath)
+	{
+#>
+<div class="editor-label">
+    <label for="<#+Write(propertyName);#>"><#+Write(SplitCamelCase(propertyName));#></label>
+</div>
+<div class="editor-field">
+    <input class="k-textbox" name="<#+Write(propertyName);#>" type="text" value="" data-bind="value:<#+Write(propertyPath);#>" />
+</div>
+<#+
+	}
+	
+	void WriteTemplateBool(string propertyName, string propertyPath)
+	{
+#>
+<div class="editor-label">
+    <label for="<#+Write(propertyName);#>"><#+Write(SplitCamelCase(propertyName));#></label>
+</div>
+<div class="editor-field">
+    <input class="k-checkbox" name="<#+Write(propertyName);#>" type="checkbox" value="" data-bind="value:<#+Write(propertyPath);#>" />
+</div>
+<#+
+	}
+	
+	void WriteTemplateDatePicker(string propertyName, string propertyPath)
+	{
+#>
+<div class="editor-label">
+    <label for="<#+Write(propertyName);#>"><#+Write(SplitCamelCase(propertyName));#></label>
+</div>
+<div class="editor-field">
+	@(Html.Kendo().DatePicker()
+              .Name("<#+Write(propertyName);#>")
+              .HtmlAttributes(new { style = "width:150px", data_bind="value:<#+Write(propertyPath);#>" })
+        )
+</div>
+<#+
+	}
+	
+	void WriteTemplateRichText(string propertyName, string propertyPath)
+	{
+#>
+<div class="editor-label">
+    <label for="<#+Write(propertyName);#>"><#+Write(SplitCamelCase(propertyName));#></label>
+</div>
+<div class="editor-field">
+	@(Html.Kendo().Editor
+    .HtmlAttributes(new { style = "width:600px;height:200px", data_bind="value:<#+Write(propertyPath);#>" })
+    .Tools(tools => tools
+        .Clear()
+        .Bold().Italic().Underline().Strikethrough()
+        .JustifyLeft().JustifyCenter().JustifyRight().JustifyFull()
+        .InsertUnorderedList().InsertOrderedList()
+        .Outdent().Indent()
+        .ViewHtml()
+    )
+)
+</div>
+<#+
+	}
+#>

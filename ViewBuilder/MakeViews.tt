@@ -2,13 +2,13 @@
 <#@ include file="SaveOutput.tt" #>
 <#@ include file="SingleFile.tt" #>
 <#@ assembly name="System.Core" #>
-<#@ assembly name="$(SolutionDir)\TorchPeopleDoc\bin\TorchPeopleDoc.dll" #>
+<#@ assembly name="$(SolutionDir)\Burnsba\bin\Burnsba.dll" #>
 <#@ assembly name="$(SolutionDir)\BuildJavascriptDataModel\bin\Debug\BuildJavascriptDataModel.dll" #>
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.IO" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#@ import namespace="Microsoft.VisualStudio.TextTemplating" #>
-<#@ import namespace="TorchPeopleDoc.Models" #>
+<#@ import namespace="Burnsba.Models" #>
 <#
 	// config settings
 	string outputDirectory = this.Host.ResolvePath(".");

@@ -11,3 +11,7 @@ A brief overview of how these tools might be used:
 - In some project -- let's call it Core -- define which Types will be used in the client code.
 - After the model has been tagged and useable Types have been listed in Core, use the BuildJavascriptDataModel class to automatically generate JavaScript which will define the view model classes.
 - Use the MakeViews script to automatically generate partial views for the listed classes in Core and add an HTML attribute to data bind each property to a property of the same name.
+
+### Notes
+
+BuildJavascriptDataModel is based on the project at http://buildjavascriptmodel.codeplex.com/

@@ -12,6 +12,10 @@ A brief overview of how these tools might be used:
 - After the model has been tagged and useable Types have been listed in Core, use the BuildJavascriptDataModel class to automatically generate JavaScript which will define the view model classes.
 - Use the MakeViews script to automatically generate partial views for the listed classes in Core and add an HTML attribute to data bind each property to a property of the same name.
 
+### Notable Features
+
+- If Core lists a class which should have a JavaScript viewmodel but it should not have a director editor -- for instance, it is a child property of another class and does not need it's own partial editor but it does need a JavaScript view model -- the class can be listed as a "hidden" type. Doing so will cause it to be included as a child property of the parent class. Additionally, when building the partial editor views the data bind attribute will reference the full path of the property (Example: Education class with property of type Degree; partial view would have an editor with data bind attribute "value: Education.Degree").  
+
 ### Notes
 
 BuildJavascriptDataModel is based on the project at http://buildjavascriptmodel.codeplex.com/

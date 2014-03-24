@@ -3,7 +3,7 @@
 Set of Visual Studio T4 Text Templates to automatically create view editors for use with a JavaScript mvvm platform.
 
 - Automatically split camel case into display name
-- Properties must be white listed with [ExportToJs] attribute
+- By default, no properties are included. Properties must be white listed with [ExportToJs] attribute or [ScaffoldColumnAttribute(true)]. ScaffoldColumnAttribute(false) is higher priority than ExportToJs.
 - Uses System.ComponentModel.DataAnnotations attributes
 - Use [DataTypeAttribute] (example: [DataTypeAttribute("richtextc")] ) to choose view editor template
 - Use [Display] attribute Name property to set label name; if type is nullable, use Description property to set checkbox label. (Example: 'public Nullable<System.DateTime> EndDate' with attribute [Display(Name = "End Date", Description = "Currently Ongoing")])

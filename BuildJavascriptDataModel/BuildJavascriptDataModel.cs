@@ -8,15 +8,15 @@ using System.Collections;
 
 namespace BuildJavascriptDataModel
 {
-	/// <summary>
-	/// Helper class to determine if a type is nullable
-	/// </summary>
-	public static class ValueTypeHelper
+    /// <summary>
+    /// Helper class to determine if a type is nullable
+    /// </summary>
+    public static class ValueTypeHelper
     {
         public static bool IsNullable<T>(T t) { return false; }
         public static bool IsNullable<T>(T? t) where T : struct { return true; }
     }
-	
+    
     /// <summary>
     /// Returns a JavaScript object that represents your .net data model.
     /// It works by using reflection to find all the public properties in the class that
@@ -137,8 +137,8 @@ namespace BuildJavascriptDataModel
             {
                 properties = modelType.GetProperties().ToList();
             }
-			
-			int counter = 0;
+            
+            int counter = 0;
             int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToJs)));
 
             // go over all the properties found
@@ -148,8 +148,8 @@ namespace BuildJavascriptDataModel
                 {
                     continue;
                 }
-				
-				counter++;
+                
+                counter++;
 
                 PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
 
@@ -171,8 +171,8 @@ namespace BuildJavascriptDataModel
                 {
                     isList = false;
                 }
-				
-				string fullName = propertyInfo.PropertyType.FullName.ToLower();
+                
+                string fullName = propertyInfo.PropertyType.FullName.ToLower();
 
                 bool isNullable = propertyInfo.PropertyType.IsGenericType &&
                         propertyInfo.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>);

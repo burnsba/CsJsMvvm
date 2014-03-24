@@ -8,6 +8,15 @@ using System.Collections;
 
 namespace BuildJavascriptDataModel
 {
+	/// <summary>
+	/// Helper class to determine if a type is nullable
+	/// </summary>
+	public static class ValueTypeHelper
+    {
+        public static bool IsNullable<T>(T t) { return false; }
+        public static bool IsNullable<T>(T? t) where T : struct { return true; }
+    }
+	
     /// <summary>
     /// Returns a JavaScript object that represents your .net data model.
     /// It works by using reflection to find all the public properties in the class that
@@ -128,6 +137,9 @@ namespace BuildJavascriptDataModel
             {
                 properties = modelType.GetProperties().ToList();
             }
+			
+			int counter = 0;
+            int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToJs)));
 
             // go over all the properties found
             foreach (PropertyInfo propertyInfo in properties)
@@ -136,6 +148,8 @@ namespace BuildJavascriptDataModel
                 {
                     continue;
                 }
+				
+				counter++;
 
                 PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
 
@@ -157,12 +171,31 @@ namespace BuildJavascriptDataModel
                 {
                     isList = false;
                 }
+				
+				string fullName = propertyInfo.PropertyType.FullName.ToLower();
+
+                bool isNullable = propertyInfo.PropertyType.IsGenericType &&
+                        propertyInfo.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>);
+
+                if (isNullable)
+                {
+                    // this is a nullable type, but the underlying type is simple,
+                    // so avoid recursing an object with one property.
+                    if (propertyInfo.PropertyType.GenericTypeArguments != null &&
+                            propertyInfo.PropertyType.GenericTypeArguments.Length == 1 &&
+                            propertyInfo.PropertyType.GenericTypeArguments[0] != null &&
+                            !String.IsNullOrEmpty(propertyInfo.PropertyType.GenericTypeArguments[0].FullName))
+                    {
+                        p = propertyInfo.PropertyType.GenericTypeArguments[0].GetProperties();
+                        fullName = propertyInfo.PropertyType.GenericTypeArguments[0].FullName.ToLower();
+                    }
+                }
 
                 // does recursion need to occur, and not a list?
                 if (p.Length > 0 && !isList)
                 {
                     // some basic .NET types have child properties, but these shouldn't be recursed.
-                    switch (propertyInfo.PropertyType.FullName.ToLower())
+                    switch (fullName)
                     {
                         case "system.string": /* fall through */
                         case "system.datetime":
@@ -171,13 +204,13 @@ namespace BuildJavascriptDataModel
                                 padding,
                                 propertyInfo.Name,
                                 AssignedValue,
-                                propertyInfo == properties.Last());
+                                counter == len);
 
                             break;
 
                         // other types are acceptable to recurse
                         default:
-                            string d = InternalFormat(propertyInfo.Name, level + 1, "", propertyInfo.PropertyType, "", propertyInfo == properties.Last());
+                            string d = InternalFormat(propertyInfo.Name, level + 1, "", propertyInfo.PropertyType, "", counter == len);
                             sb.Append(d);
                             break;
                     }
@@ -191,7 +224,7 @@ namespace BuildJavascriptDataModel
                             padding,
                             propertyInfo.Name,
                             ListValue,
-                            propertyInfo == properties.Last());
+                            counter == len);
                     }
                     else
                     {
@@ -200,7 +233,7 @@ namespace BuildJavascriptDataModel
                             padding,
                             propertyInfo.Name,
                             AssignedValue,
-                            propertyInfo == properties.Last());
+                            counter == len);
                     }
                 }
             }

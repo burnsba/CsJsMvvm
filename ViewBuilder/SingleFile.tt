@@ -15,12 +15,34 @@
 	
 	void SingleFile(Type modelType)
 	{
+		if (modelType == null)
+        {
+			WriteLine("@* model is null! aborting. *@");
+			return;
+        }
+
+		WriteLine("");
 		WriteLine("@model " + modelType.FullName);
+		WriteLine("");
 		
 		InternalFormat(modelType, 0, null);
 	}
 
-	void StringBuilderHelper(Type modelType, string propertyName, string propertyPath, string editor)
+	/// <summary>
+	/// Returns a JavaScript code snippet which is passed to an onchange attribute as a parameter
+	/// </summary>
+	string GetJsDefaultNew(string propertyName)
+    {
+		switch(propertyName.ToLower())
+		{
+			case "system.datetime" :
+				return "new Date()";
+			default:
+				return "null";
+		}
+    }
+
+	void StringBuilderHelper(Type modelType, string propertyName, string propertyPath, string editor, bool isNullable = false, string nullablePropertyDisplay = "")
 	{
 		if (includeDebug)
 		{
@@ -33,6 +55,17 @@
 		}
 		
 		string editorName = editor.ToLower();
+		if (string.IsNullOrEmpty(editor))
+        {
+			editorName = modelType.FullName.ToLower();
+        }
+
+		string propertyNameClean = DropWriteSpace(propertyName);
+
+		if (isNullable)
+        {
+			WriteTemplateNullableOpen(propertyNameClean, nullablePropertyDisplay, GetJsDefaultNew(editorName));
+        }
 		
 		switch(editorName)
 		{
@@ -41,16 +74,21 @@
 				break;
 			case "richtext":
 			case "html":
-				WriteTemplateRichText(propertyName, propertyPath);
+				WriteTemplateRichText(propertyNameClean, propertyPath);
 				break;
 			case "system.datetime" :
-				WriteTemplateDatePicker(propertyName, propertyPath);
+				WriteTemplateDatePicker(propertyNameClean, propertyPath);
 				break;
 			case "system.string": /* fall through */
 			default:
-				WriteTemplateTextEditor(propertyName, propertyPath);
+				WriteTemplateTextEditor(propertyNameClean, propertyPath);
 				break;
 		}
+
+		if (isNullable)
+        {
+			WriteTemplateNullableClose();
+        }
 	}
 	
 	void InternalFormat(Type modelType, int level, string propertyPath)
@@ -88,10 +126,60 @@
 		// go over all the properties found
 		foreach (PropertyInfo propertyInfo in properties)
 		{
-			if (!Attribute.IsDefined(propertyInfo, typeof(ExportToJs)))
+			bool useProperty = false;
+
+			// check for default ExportToJs attribute 
+			if(Attribute.IsDefined(propertyInfo, typeof(ExportToJs)))
+            {
+				useProperty = true;
+            }
+
+			// but note that ScaffoldColumnAttribute takes priority if defined
+			if (Attribute.IsDefined(propertyInfo, typeof(ScaffoldColumnAttribute)))
 			{
-				continue;
+				ScaffoldColumnAttribute[] sca = propertyInfo
+													.GetCustomAttributes(typeof(ScaffoldColumnAttribute), false)
+													.OfType<ScaffoldColumnAttribute>()
+													.ToArray();
+
+				if (sca.Length > 0)
+                {
+					if (sca[0].Scaffold == true)
+                    {
+						useProperty = true;
+                    }
+					else
+                    {
+						useProperty = false;
+                    }
+                }
 			}
+
+			if (useProperty == false)
+            {
+				continue;
+            }
+
+			// need to check for lists to prevent recursion on collection types
+			bool isList = false;
+
+			// default property label. Can be over written with attribute [Display(Name = "...")]
+			string propertyDisplay = propertyInfo.Name;
+
+			// Need to check if the type is nullable to prevent recursion on simple types
+			bool isNullable = false;
+
+			// default checkbox label for nullable types. Can be over written with attribute [Display(Description = "...")]
+			string nullablePropertyDisplay = "Use " + propertyInfo.Name;
+
+			//  Default editor is property fullname if no attributes are set
+			string fullName = propertyInfo.PropertyType.FullName;
+			string editor = String.Empty;
+
+			// prepend any path information if this is inside a recursive call
+			string fullPropertyPath = String.IsNullOrEmpty(propertyPrefix)
+				? propertyInfo.Name
+				: propertyPrefix + propertyInfo.Name;
 			
 			PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
 
@@ -99,7 +187,6 @@
 			//     if(propertyInfo.PropertyType is IEnumerable)
 			// was always returning false. Had to find another method of checking
 			// for lists; not sure how accurate this will be ...
-			bool isList = false;
 			if (typeof(IEnumerable).IsAssignableFrom(propertyInfo.PropertyType) ||
 				typeof(ICollection).IsAssignableFrom(propertyInfo.PropertyType) ||
 				typeof(IDictionary).IsAssignableFrom(propertyInfo.PropertyType) ||
@@ -114,19 +201,33 @@
 				isList = false;
 			}
 			
-			// prepend any path information if this is inside a recursive call
-			string fullPropertyPath = String.IsNullOrEmpty(propertyPrefix)
-				? propertyInfo.Name
-				: propertyPrefix + propertyInfo.Name;
-			
 			if (includeDebug)
 			{
 				WriteLine("@* Property attributes length: " + propertyInfo.GetCustomAttributes().Count() + " *@");
 			}
+
+			// If the data type is nullable, the property type name won't exactly match, but if this
+			// is a "simple" type (string, datetime, etc) then the nullable type is easily handled
+			// in the view editor template. In that case, pull out the type name of the underlying
+			// type.
+			isNullable = propertyInfo.PropertyType.IsGenericType &&
+					propertyInfo.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>);
+
+			if (isNullable)
+			{
+				if (propertyInfo.PropertyType.GenericTypeArguments != null &&
+						propertyInfo.PropertyType.GenericTypeArguments.Length == 1 &&
+						propertyInfo.PropertyType.GenericTypeArguments[0] != null &&
+						!String.IsNullOrEmpty(propertyInfo.PropertyType.GenericTypeArguments[0].FullName))
+				{
+					p = propertyInfo.PropertyType.GenericTypeArguments[0].GetProperties();
+					fullName = propertyInfo.PropertyType.GenericTypeArguments[0].FullName;
+				}
+			}
 			
 			// Check to see if there's a data type attribute in use on the property. If so,
 			// grab the type and pass that along to choose the view editor template.
-			string editor = String.Empty;
+			
 			DataTypeAttribute[] dtattr = propertyInfo
 							.GetCustomAttributes(typeof(DataTypeAttribute), false)
 							.OfType<DataTypeAttribute>()
@@ -153,29 +254,49 @@
 			}
 			else
 			{
-				editor = propertyInfo.PropertyType.FullName;
+				editor = fullName;
 			}
-			
+
+			// Check for display attribute
+			DisplayAttribute[] displayAttributes = propertyInfo
+							.GetCustomAttributes(typeof(DisplayAttribute), false)
+							.OfType<DisplayAttribute>()
+							.ToArray();
+			if (displayAttributes.Length > 0)
+            {
+				DisplayAttribute da = displayAttributes[0];
+
+				if (!string.IsNullOrEmpty(da.Name))
+                {
+					propertyDisplay = da.Name;
+				}
+
+				if (!string.IsNullOrEmpty(da.Description))
+                {
+					nullablePropertyDisplay = da.Description;
+				}
+            }
+
 			// does recursion need to occur, and not a list?
 			if (p.Length > 0 && !isList)
 			{
 				// some basic .NET types have child properties, but these shouldn't be recursed.
-				switch (propertyInfo.PropertyType.FullName.ToLower())
+				switch (fullName.ToLower())
 				{
 					case "system.string": /* fall through */
 					case "system.datetime":
-						StringBuilderHelper(propertyInfo.PropertyType, propertyInfo.Name, fullPropertyPath, editor);
+						StringBuilderHelper(propertyInfo.PropertyType, propertyDisplay, fullPropertyPath, editor, isNullable, nullablePropertyDisplay);
 						break;
 
 					// other types are acceptable to recurse
 					default:
-						InternalFormat(propertyInfo.PropertyType, level + 1, propertyInfo.Name + ".");
+						InternalFormat(propertyInfo.PropertyType, level + 1, fullPropertyPath + ".");
 						break;
 				}
 			}
 			else
 			{
-				StringBuilderHelper(propertyInfo.PropertyType, propertyInfo.Name, fullPropertyPath, editor);
+				StringBuilderHelper(propertyInfo.PropertyType, propertyDisplay, fullPropertyPath, editor, isNullable, nullablePropertyDisplay);
 			}
 		}
 	}
@@ -187,8 +308,44 @@
 			return String.Empty;
 		}
 		
-		return Regex.Replace(input, "([a-z](?=[A-Z])|[A-Z](?=[A-Z][a-z]))", "$1 ");
+		return Regex.Replace(input, @"([a-z](?=[A-Z])|[A-Z](?=[A-Z][a-z]))", "$1 ");
 	}
+
+	string DropWriteSpace(string input)
+	{
+		if (String.IsNullOrEmpty(input))
+		{
+			return String.Empty;
+		}
+		
+		return Regex.Replace(input, @"[\s]+", "");
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	// View helper templates
+
+	void WriteTemplateNullableOpen(string propertyName, string nullablePropertyDisplay, string jsDefaultNew)
+    {
+		string nullablePropertyName = DropWriteSpace(nullablePropertyDisplay);
+#>
+<div class="editor-label">
+    <label for="<#+Write(nullablePropertyName);#>"><#+Write(SplitCamelCase(nullablePropertyDisplay));#>:</label>
+
+    <input type="checkbox" class="k-checkbox" name="<#+Write(nullablePropertyName);#>"
+        onchange="NullableValueChange(this, '<#+Write(propertyName);#>', <#+Write(jsDefaultNew);#>);"
+        data-bind="nullableValue: <#+Write(propertyName);#>"/>
+
+    <div class="nullableBaseValue">
+<#+
+    }
+
+	void WriteTemplateNullableClose()
+    {
+#>
+    </div>
+</div>
+<#+
+    }
 	
 	////////////////////////////////////////////////////////////////////////////////
 	// View templates

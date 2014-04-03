@@ -7,6 +7,7 @@ Set of Visual Studio T4 Text Templates to automatically create view editors for 
 - Uses System.ComponentModel.DataAnnotations attributes
 - Use [DataTypeAttribute] (example: [DataTypeAttribute("richtextc")] ) to choose view editor template
 - Use [Display] attribute Name property to set label name; if type is nullable, use Description property to set checkbox label. (Example: 'public Nullable<System.DateTime> EndDate' with attribute [Display(Name = "End Date", Description = "Currently Ongoing")])
+- Also included sample T4 to generate XSLT for a resume document as a C# object serialized to XML
 
 ###### A few notes on the nullableValue binding:
 

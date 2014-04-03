@@ -112,10 +112,22 @@ namespace ModelTranslator
 
             List<PropertyInfo> properties = Reflection.GetProperties(modelType);
 
+<<<<<<< HEAD:BuildJavascriptDataModel/BuildJavascriptDataModel.cs
+            // if this is not a partial class, retrieve attributes the direct way
+            if (metadataTypes.Count() == 0)
+            {
+                properties = modelType.GetProperties().ToList();
+            }
+            
+            int counter = 0;
+            int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToJs)));
+
+=======
             int counter = 0;
             int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToViewModel)));
             
 			
+>>>>>>> merge_latest:ModelTranslator/BuildJavaScriptViewModel.cs
             // go over all the properties found
             foreach (PropertyInfo propertyInfo in properties)
             {
@@ -123,10 +135,15 @@ namespace ModelTranslator
                 {
                     continue;
                 }
+<<<<<<< HEAD:BuildJavascriptDataModel/BuildJavascriptDataModel.cs
+                
+                counter++;
+=======
 
                 counter++;
                 
                 bool stopRecursion = false;
+>>>>>>> merge_latest:ModelTranslator/BuildJavaScriptViewModel.cs
 
                 PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
 
@@ -136,6 +153,11 @@ namespace ModelTranslator
                 {
                     stopRecursion = true;
                 }
+<<<<<<< HEAD:BuildJavascriptDataModel/BuildJavascriptDataModel.cs
+                
+                string fullName = propertyInfo.PropertyType.FullName.ToLower();
+=======
+>>>>>>> merge_latest:ModelTranslator/BuildJavaScriptViewModel.cs
 
                 string fullName = propertyInfo.PropertyType.FullName.ToLower();
 

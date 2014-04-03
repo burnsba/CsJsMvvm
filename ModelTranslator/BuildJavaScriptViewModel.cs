@@ -10,18 +10,6 @@ using ModelTranslator.Utilities;
 
 namespace ModelTranslator
 {
-<<<<<<< HEAD:BuildJavascriptDataModel/BuildJavascriptDataModel.cs
-    /// <summary>
-    /// Helper class to determine if a type is nullable
-    /// </summary>
-    public static class ValueTypeHelper
-    {
-        public static bool IsNullable<T>(T t) { return false; }
-        public static bool IsNullable<T>(T? t) where T : struct { return true; }
-    }
-    
-=======
->>>>>>> merge_latest:ModelTranslator/BuildJavaScriptViewModel.cs
     /// <summary>
     /// Returns a JavaScript object that represents your .net data model.
     /// It works by using reflection to find all the public properties in the class that

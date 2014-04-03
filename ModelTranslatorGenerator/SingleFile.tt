@@ -1,6 +1,6 @@
-<#@ template language="C#" hostspecific="true" #>
 <#@ assembly name="System.Core" #>
 <#@ assembly name="System.ComponentModel.DataAnnotations.dll" #>
+<#@ assembly name="$(SolutionDir)\\ModelTranslator\bin\Debug\ModelTranslator.dll" #>
 <#@ import namespace="System" #>
 <#@ import namespace="System.IO" #>
 <#@ import namespace="System.Linq" #>
@@ -9,11 +9,12 @@
 <#@ import namespace="System.Reflection" #>
 <#@ import namespace="System.ComponentModel.DataAnnotations" #>
 <#@ import namespace="System.Text.RegularExpressions" #>
-<#@ import namespace="BuildJavascriptDataModel" #>
+<#@ import namespace="ModelTranslator.Attributes" #>
+<#@ import namespace="ModelTranslator.Utilities" #>
 <#+
 	bool includeDebug = false;
 	
-	void SingleFile(Type modelType)
+	private  void SingleFile(Type modelType)
 	{
 		if (modelType == null)
         {
@@ -31,7 +32,7 @@
 	/// <summary>
 	/// Returns a JavaScript code snippet which is passed to an onchange attribute as a parameter
 	/// </summary>
-	string GetJsDefaultNew(string propertyName)
+	private string GetJsDefaultNew(string propertyName)
     {
 		switch(propertyName.ToLower())
 		{
@@ -42,7 +43,7 @@
 		}
     }
 
-	void StringBuilderHelper(Type modelType, string propertyName, string propertyPath, string editor, bool isNullable = false, string nullablePropertyDisplay = "")
+	private void StringBuilderHelper(Type modelType, string propertyName, string propertyPath, string editor, bool isNullable = false, string nullablePropertyDisplay = "")
 	{
 		if (includeDebug)
 		{
@@ -91,7 +92,7 @@
         }
 	}
 	
-	void InternalFormat(Type modelType, int level, string propertyPath)
+	private void InternalFormat(Type modelType, int level, string propertyPath)
 	{
 		string propertyPrefix = String.IsNullOrEmpty(propertyPath) ? "" : propertyPath;
 		
@@ -117,7 +118,7 @@
 			properties = metadata.MetadataClassType.GetProperties().ToList();
 		}
 		
-		// if this is not a partial class, retrieve attributes the direct way
+		// if this is not a partial class, retrieve properties the direct way
 		if (metadataTypes.Count() == 0)
 		{
 			properties = modelType.GetProperties().ToList();
@@ -128,8 +129,8 @@
 		{
 			bool useProperty = false;
 
-			// check for default ExportToJs attribute 
-			if(Attribute.IsDefined(propertyInfo, typeof(ExportToJs)))
+			// check for default ExportToViewModel attribute 
+			if(Attribute.IsDefined(propertyInfo, typeof(ExportToViewModel)))
             {
 				useProperty = true;
             }
@@ -301,7 +302,7 @@
 		}
 	}
 	
-	string SplitCamelCase(string input)
+	private string SplitCamelCase(string input)
 	{
 		if (String.IsNullOrEmpty(input))
 		{
@@ -311,7 +312,7 @@
 		return Regex.Replace(input, @"([a-z](?=[A-Z])|[A-Z](?=[A-Z][a-z]))", "$1 ");
 	}
 
-	string DropWriteSpace(string input)
+	private string DropWriteSpace(string input)
 	{
 		if (String.IsNullOrEmpty(input))
 		{
@@ -324,7 +325,7 @@
 	////////////////////////////////////////////////////////////////////////////////
 	// View helper templates
 
-	void WriteTemplateNullableOpen(string propertyName, string nullablePropertyDisplay, string jsDefaultNew)
+	private void WriteTemplateNullableOpen(string propertyName, string nullablePropertyDisplay, string jsDefaultNew)
     {
 		string nullablePropertyName = DropWriteSpace(nullablePropertyDisplay);
 #>
@@ -339,7 +340,7 @@
 <#+
     }
 
-	void WriteTemplateNullableClose()
+	private void WriteTemplateNullableClose()
     {
 #>
     </div>
@@ -350,7 +351,7 @@
 	////////////////////////////////////////////////////////////////////////////////
 	// View templates
 	
-	void WriteTemplateTextEditor(string propertyName, string propertyPath)
+	private void WriteTemplateTextEditor(string propertyName, string propertyPath)
 	{
 #>
 <div class="editor-label">
@@ -362,7 +363,7 @@
 <#+
 	}
 	
-	void WriteTemplateBool(string propertyName, string propertyPath)
+	private void WriteTemplateBool(string propertyName, string propertyPath)
 	{
 #>
 <div class="editor-label">
@@ -374,7 +375,7 @@
 <#+
 	}
 	
-	void WriteTemplateDatePicker(string propertyName, string propertyPath)
+	private void WriteTemplateDatePicker(string propertyName, string propertyPath)
 	{
 #>
 <div class="editor-label">
@@ -389,7 +390,7 @@
 <#+
 	}
 	
-	void WriteTemplateRichText(string propertyName, string propertyPath)
+	private void WriteTemplateRichText(string propertyName, string propertyPath)
 	{
 #>
 <div class="editor-label">

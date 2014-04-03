@@ -1,26 +1,19 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using System.Linq;
 using System.Text;
 using System.Collections.Generic;
 using System.Collections;
+using ModelTranslator.Attributes;
+using ModelTranslator.Utilities;
 
-namespace BuildJavascriptDataModel
+namespace ModelTranslator
 {
-	/// <summary>
-	/// Helper class to determine if a type is nullable
-	/// </summary>
-	public static class ValueTypeHelper
-    {
-        public static bool IsNullable<T>(T t) { return false; }
-        public static bool IsNullable<T>(T? t) where T : struct { return true; }
-    }
-	
     /// <summary>
     /// Returns a JavaScript object that represents your .net data model.
     /// It works by using reflection to find all the public properties in the class that
-    /// are marked by the <see cref="ExportToJs"/> attribute.
+    /// are marked by the <see cref="ExportToViewModel"/> attribute.
     /// </summary>
     /// <remarks>
     /// Partial classes can add custom attributes by using the <see cref="MetadataType"/>
@@ -28,7 +21,7 @@ namespace BuildJavascriptDataModel
     /// 
     /// Based on the project at http://buildjavascriptmodel.codeplex.com/
     /// </remarks>
-    public class BuildJavascriptDataModel
+    public class BuildJavaScriptViewModel
     {
         #region Constants and Fields
 
@@ -39,6 +32,7 @@ namespace BuildJavascriptDataModel
         //private const string AssignedValue = " ko.observable()";
         private const string AssignedValue = "\"\"";
         private const string ListValue = "[]";
+        private const string DateValue = "new Date()";
 
         #endregion
 
@@ -116,108 +110,63 @@ namespace BuildJavascriptDataModel
                 sb.AppendFormat("{0}{1}: {{ " + eol, spaces.PadLeft((level) * 4), targetName);
             }
 
-            // need to check for indirect attributes added to partial classes,
-            // for instance, partial classes generated with Entity Framework.
-            // http://stackoverflow.com/questions/1910532/attribute-isdefined-doesnt-see-attributes-applied-with-metadatatype-class
-            MetadataTypeAttribute[] metadataTypes =
-                    modelType
-                    .GetCustomAttributes(typeof(MetadataTypeAttribute), true)
-                    .OfType<MetadataTypeAttribute>()
-                    .ToArray();
-            MetadataTypeAttribute metadata = metadataTypes.FirstOrDefault();
+            List<PropertyInfo> properties = Reflection.GetProperties(modelType);
 
-            List<PropertyInfo> properties = new List<PropertyInfo>();
-            if (metadata != null)
-            {
-                properties = metadata.MetadataClassType.GetProperties().ToList();
-            }
-
-            // if this is not a partial class, retrieve attributes the direct way
-            if (metadataTypes.Count() == 0)
-            {
-                properties = modelType.GetProperties().ToList();
-            }
+            int counter = 0;
+            int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToViewModel)));
+            
 			
-			int counter = 0;
-            int len = properties.Count(x => Attribute.IsDefined(x, typeof(ExportToJs)));
-
             // go over all the properties found
             foreach (PropertyInfo propertyInfo in properties)
             {
-                if (!Attribute.IsDefined(propertyInfo, typeof(ExportToJs)))
+                if (!Attribute.IsDefined(propertyInfo, typeof(ExportToViewModel)))
                 {
                     continue;
                 }
-				
-				counter++;
+
+                counter++;
+                
+                bool stopRecursion = false;
 
                 PropertyInfo[] p = propertyInfo.PropertyType.GetProperties();
 
-                // Notes on the list checking:
-                //     if(propertyInfo.PropertyType is IEnumerable)
-                // was always returning false. Had to find another method of checking
-                // for lists; not sure how accurate this will be ...
-                bool isList = false;
-                if (typeof(IEnumerable).IsAssignableFrom(propertyInfo.PropertyType) ||
-                    typeof(ICollection).IsAssignableFrom(propertyInfo.PropertyType) ||
-                    typeof(IDictionary).IsAssignableFrom(propertyInfo.PropertyType) ||
-                    propertyInfo.PropertyType.IsArray)
+                bool isList = Reflection.IsList(propertyInfo.PropertyType);
+
+                if (isList)
                 {
-                    isList = true;
+                    stopRecursion = true;
                 }
 
-                // strings are enumerable, grrr
-                if (propertyInfo.PropertyType.FullName.ToLower() == "system.string")
-                {
-                    isList = false;
-                }
-				
-				string fullName = propertyInfo.PropertyType.FullName.ToLower();
+                string fullName = propertyInfo.PropertyType.FullName.ToLower();
 
-                bool isNullable = propertyInfo.PropertyType.IsGenericType &&
-                        propertyInfo.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>);
-
-                if (isNullable)
+                if (Reflection.IsNullable(propertyInfo.PropertyType) && Reflection.IsSimpleGeneric(propertyInfo.PropertyType))
                 {
                     // this is a nullable type, but the underlying type is simple,
                     // so avoid recursing an object with one property.
-                    if (propertyInfo.PropertyType.GenericTypeArguments != null &&
-                            propertyInfo.PropertyType.GenericTypeArguments.Length == 1 &&
-                            propertyInfo.PropertyType.GenericTypeArguments[0] != null &&
-                            !String.IsNullOrEmpty(propertyInfo.PropertyType.GenericTypeArguments[0].FullName))
+                    Type underlyingType = Reflection.GetSimpleGenericUnderlying(propertyInfo.PropertyType);
                     {
-                        p = propertyInfo.PropertyType.GenericTypeArguments[0].GetProperties();
-                        fullName = propertyInfo.PropertyType.GenericTypeArguments[0].FullName.ToLower();
+                        p = underlyingType.GetProperties();
+                        fullName = underlyingType.FullName.ToLower();
+                        stopRecursion = true;
                     }
                 }
 
-                // does recursion need to occur, and not a list?
-                if (p.Length > 0 && !isList)
+                // is this a simple builtin type?
+                switch (fullName.ToLower())
                 {
                     // some basic .NET types have child properties, but these shouldn't be recursed.
-                    switch (fullName)
-                    {
-                        case "system.string": /* fall through */
-                        case "system.datetime":
-
-                            StringBuilderHelper(ref sb,
-                                padding,
-                                propertyInfo.Name,
-                                AssignedValue,
-                                counter == len);
-
-                            break;
-
-                        // other types are acceptable to recurse
-                        default:
-                            string d = InternalFormat(propertyInfo.Name, level + 1, "", propertyInfo.PropertyType, "", counter == len);
-                            sb.Append(d);
-                            break;
-                    }
+                    case "system.string": /* fall through */
+                    case "system.datetime":
+                    case "system.guid":
+                        stopRecursion = true;
+                        break;
+                    default:
+                        break;
                 }
-                else
+
+                // decide whether to recurse or output.
+                if (stopRecursion)
                 {
-                    // Else, this doesn't have children properties.
                     if (isList)
                     {
                         StringBuilderHelper(ref sb,
@@ -226,16 +175,29 @@ namespace BuildJavascriptDataModel
                             ListValue,
                             counter == len);
                     }
+                    else if (fullName == "system.datetime")
+                    {
+                        StringBuilderHelper(ref sb,
+                                padding,
+                                propertyInfo.Name,
+                                DateValue,
+                                counter == len);
+                    }
                     else
                     {
-                        // not a list
                         StringBuilderHelper(ref sb,
-                            padding,
-                            propertyInfo.Name,
-                            AssignedValue,
-                            counter == len);
+                                padding,
+                                propertyInfo.Name,
+                                AssignedValue,
+                                counter == len);
                     }
                 }
+                else
+                {
+                    string d = InternalFormat(propertyInfo.Name, level + 1, "", propertyInfo.PropertyType, "", counter == len);
+                    sb.Append(d);
+                }
+
             }
 
             // closing brace is included below, but need to check for rootAppend text
